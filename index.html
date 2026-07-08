@@ -260,6 +260,9 @@
   .smallbtn{ font-size:12px; font-weight:700; color:var(--navy); background:#fff; padding:7px 12px; border-radius:999px; box-shadow:var(--shadow); }
   .smallbtn.danger{ color:var(--brick); }
   .row-actions{ display:flex; flex-direction:column; gap:8px; align-items:flex-end; flex-shrink:0; }
+  .sync-pill{ display:inline-block; font-size:12px; font-weight:700; padding:3px 10px; border-radius:999px; margin-left:4px; }
+  .sync-ok{ background:#1F7C72; color:#fff; }
+  .sync-off{ background:#C9611F; color:#fff; }
   .studentrow{ display:flex; align-items:flex-start; gap:14px; padding:14px; border-radius:14px; background:var(--sky); margin-bottom:10px; }
   .studentrow .name{ font-weight:700; color:var(--navy); font-size:15px; }
   .studentrow .meta{ font-size:12px; color:var(--ink-soft); margin-top:2px; }
@@ -388,7 +391,7 @@
    Google Sheet. Leave blank to keep each iPad separate.
    Setup steps are in the guide that came with this file.
 ═══════════════════════════════════════════════════════════════ */
-const SHEET_SYNC_URL = "https://script.google.com/macros/s/AKfycbzTCn8YqcQmEnQmnJJfN5UlxDMsOb8_98LLc9n6pUk8SQp1IhW6WmvnFuQCfahAMILDxA/exec";
+const SHEET_SYNC_URL = "";
 const SHEET_ENABLED = /^https:\/\/script\.google\.com\//.test(SHEET_SYNC_URL);
 
 /* ---------------------------------------------------------
@@ -778,6 +781,33 @@ async function loadRoster(){
   ROSTER = r || [];
 }
 async function saveRoster(){ await setData('roster', ROSTER); }
+
+// Teacher use: pull the freshest roster from the shared Sheet, ignoring the local copy,
+// so every student created on ANY iPad appears. Falls back to local if offline.
+async function loadRosterLive(){
+  if(STORAGE_BACKEND === 'sheet'){
+    delete MEMORY_FALLBACK['roster'];
+    const res = await sheetRequest({ action:'roster' });
+    if(res && res.ok && Array.isArray(res.students)){
+      ROSTER = res.students;
+      MEMORY_FALLBACK['roster'] = ROSTER;
+      localSet('roster', ROSTER);
+      return true;
+    }
+  }
+  // Any other backend, or Sheet unreachable: use the normal path
+  await loadRoster();
+  return false;
+}
+
+// Teacher use: pull one student's full record fresh from the Sheet, ignoring cache.
+async function getStudentLive(id){
+  if(STORAGE_BACKEND === 'sheet'){
+    delete STUDENT_CACHE[id];
+    delete MEMORY_FALLBACK['student:'+id];
+  }
+  return getStudent(id);
+}
 
 async function getStudent(id){
   if(STUDENT_CACHE[id]) return STUDENT_CACHE[id];
@@ -1884,13 +1914,18 @@ async function saveTechForm(existingId){
 
 async function renderTeacherStudents(){
   if(!requireTeacher()) return '';
-  await loadRoster();
+  const synced = await loadRosterLive();
+  const statusLine = STORAGE_BACKEND === 'sheet'
+    ? (synced
+        ? '<span class="sync-pill sync-ok">Showing all iPads</span>'
+        : '<span class="sync-pill sync-off">Offline \u2014 showing this iPad only</span>')
+    : '';
   const headerBar = `
     <div class="topbar">
       <button class="backbtn" onclick="go('teacherHome')">${icon('back')} Staff area</button>
       <button class="staffbtn" onclick="refreshStudents()">Refresh</button>
     </div>
-    <div class="gridtitle"><h2>Students</h2><p>${ROSTER.length} student${ROSTER.length===1?'':'s'} with a passport.</p></div>
+    <div class="gridtitle"><h2>Students</h2><p>${ROSTER.length} student${ROSTER.length===1?'':'s'} with a passport. ${statusLine}</p></div>
   `;
   const addBtn = `<button class="primary-action" style="margin-top:12px;" onclick="go('addStudent')">${icon('plus')} Add a student</button>`;
   if(ROSTER.length === 0){
@@ -1901,7 +1936,7 @@ async function renderTeacherStudents(){
   }
   const rows = [];
   for(const r of ROSTER){
-    const student = await getStudent(r.id);
+    const student = await getStudentLive(r.id);
     const lastVisit = student.visits.length ? prettyDate(student.visits[student.visits.length-1]) : 'Never visited';
     const tags = student.techs.map(t=>{
       const s = strandById(t.id);
@@ -1920,6 +1955,7 @@ async function renderTeacherStudents(){
           <div class="techtags">${tags || '<span class="meta">No technologies started yet</span>'}</div>
         </div>
         <div class="row-actions">
+          <button class="smallbtn" onclick="go('passport',{studentId:'${student.id}'})">Open</button>
           ${completedCount(student) > 0 ? `<button class="smallbtn" onclick="downloadCertificate('${student.id}')">Certificate</button>` : ''}
           <button class="smallbtn danger" onclick="removeStudent('${student.id}')">Remove</button>
         </div>
@@ -1933,13 +1969,13 @@ async function renderTeacherStudents(){
 }
 
 async function refreshStudents(){
-  // Clear in-memory copies so the next read genuinely hits storage (Sheet/local)
+  // Clear in-memory copies so the next read genuinely hits the Sheet, not the local mirror
   delete MEMORY_FALLBACK['roster'];
   STUDENT_CACHE = {};
   for(const key of Object.keys(MEMORY_FALLBACK)){
     if(key.startsWith('student:')) delete MEMORY_FALLBACK[key];
   }
-  showToast('Checking for the latest passports\u2026');
+  showToast('Checking all iPads for the latest passports\u2026');
   await render();
 }
 
