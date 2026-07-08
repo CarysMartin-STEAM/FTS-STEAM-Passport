@@ -279,6 +279,13 @@
   .read-aloud-btn svg{ width:22px; height:22px; }
   .read-aloud-btn.on{ background:var(--navy); color:#fff; }
   .read-aloud-btn.on svg{ animation:pulse 1.4s ease-in-out infinite; }
+  .ra-armed{ position:relative; outline:3px solid var(--gold) !important; outline-offset:2px; border-radius:14px; }
+  .ra-armed::after{
+    content:'Tap again to use'; position:absolute; top:-12px; right:8px;
+    background:var(--gold); color:var(--navy-deep); font-family:'Fredoka',sans-serif; font-weight:700;
+    font-size:11px; padding:2px 10px; border-radius:999px; white-space:nowrap; z-index:5;
+    pointer-events:none;
+  }
   @keyframes pulse{ 0%,100%{ opacity:1; } 50%{ opacity:0.5; } }
   @media (prefers-reduced-motion: reduce){ .read-aloud-btn.on svg{ animation:none; } }
   .toast{
@@ -940,6 +947,7 @@ async function render(){
     default: html = renderCover();
   }
   app.innerHTML = html;
+  if(typeof ARMED_EL !== 'undefined') ARMED_EL = null; // re-render replaces DOM; drop any stale armed reference
 }
 
 /* ---------------------------------------------------------
@@ -2050,23 +2058,66 @@ function speak(text){
 function toggleReadAloud(){
   READ_ALOUD = !READ_ALOUD;
   if(!READ_ALOUD && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+  clearArmed();
   const btn = document.getElementById('readAloudBtn');
   if(btn){
     btn.classList.toggle('on', READ_ALOUD);
     btn.setAttribute('aria-pressed', READ_ALOUD ? 'true' : 'false');
   }
-  if(READ_ALOUD) speak('Read aloud is on. Tap anything to hear it.');
+  if(READ_ALOUD) speak('Read aloud is on. Tap once to hear a button, then tap it again to use it.');
 }
 
-// When read-aloud is on, tapping any text element reads it.
+let ARMED_EL = null; // the element that has been "read" and is waiting for a confirming second tap
+function clearArmed(){
+  if(ARMED_EL){ ARMED_EL.classList.remove('ra-armed'); ARMED_EL = null; }
+}
+
+// What counts as "interactive" — a first tap only reads these; a second tap activates.
+function isInteractive(el){
+  return el.matches('button, .strandcard, .indicator-card, .studenttile, .techtile, .scale-dot, .ready-option, .bonus-card, [onclick]');
+}
+
+// Capture-phase handler: when read-aloud is on, intercept the FIRST tap on an
+// interactive element so it reads instead of firing. A second tap on the same
+// element lets the real click through.
 document.addEventListener('click', function(e){
   if(!READ_ALOUD) return;
-  const el = e.target.closest('button, .team-card, .story-step, .strandcard, .indicator-card, h1, h2, h3, p, .studenttile, .techtile, .scale-dot');
-  if(!el) return;
-  if(el.id === 'readAloudBtn') return; // don't read the toggle itself
-  const text = (el.getAttribute('aria-label') || el.innerText || el.textContent || '').replace(/\s+/g,' ').trim();
-  if(text) speak(text);
+
+  const speaker = e.target.closest('#readAloudBtn');
+  if(speaker) return; // the Hear toggle always works normally
+
+  const interactive = e.target.closest('button, .strandcard, .indicator-card, .studenttile, .techtile, .scale-dot, .ready-option, .bonus-card, [onclick]');
+
+  if(interactive){
+    if(ARMED_EL === interactive){
+      // Second tap on the same control -> let it through, and disarm
+      interactive.classList.remove('ra-armed');
+      ARMED_EL = null;
+      return; // do NOT stop; the real onclick runs
+    }
+    // First tap -> read only, block the action, arm for next tap
+    e.preventDefault();
+    e.stopPropagation();
+    clearArmed();
+    ARMED_EL = interactive;
+    interactive.classList.add('ra-armed');
+    const text = readableText(interactive);
+    if(text) speak(text);
+    return;
+  }
+
+  // Non-interactive text (headings, paragraphs, info cards): just read it, no arming needed
+  const readable = e.target.closest('.team-card, .story-step, h1, h2, h3, p, .section-label, .sstate, .meta');
+  if(readable){
+    clearArmed();
+    const text = readableText(readable);
+    if(text) speak(text);
+  }
 }, true);
+
+function readableText(el){
+  return (el.getAttribute('aria-label') || el.innerText || el.textContent || '').replace(/\s+/g,' ').trim();
+}
 
 // Floating speaker button, always available, injected once and kept across re-renders.
 function ensureReadAloudButton(){
