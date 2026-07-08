@@ -635,6 +635,13 @@ async function getData(key){
   // Memory always wins if we have it — it's the most recent state
   if(key in MEMORY_FALLBACK) return MEMORY_FALLBACK[key];
   if(STORAGE_BACKEND === 'sheet'){
+    // Local mirror first: instant, and it's kept current on every write.
+    // Only reach out to the Sheet if this device has never seen this key.
+    const localVal = localGet(key);
+    if(localVal !== null){
+      MEMORY_FALLBACK[key] = localVal;
+      return localVal;
+    }
     const v = await sheetGet(key);
     if(v !== null && v !== undefined) MEMORY_FALLBACK[key] = v;
     return (v === undefined) ? null : v;
@@ -800,6 +807,27 @@ async function loadRosterLive(){
   return false;
 }
 
+// Teacher use: fetch EVERY student's full record in a single request and prime the
+// cache, so the staff list renders from memory instead of one request per student.
+async function loadAllStudentsLive(){
+  if(STORAGE_BACKEND !== 'sheet') { await loadRoster(); return false; }
+  const res = await sheetRequest({ action:'rosterFull' });
+  if(res && res.ok && Array.isArray(res.students)){
+    ROSTER = [];
+    for(const raw of res.students){
+      const student = normalizeStudent(raw);
+      STUDENT_CACHE[student.id] = student;
+      MEMORY_FALLBACK['student:'+student.id] = student;
+      ROSTER.push({ id:student.id, name:student.name, group:student.group||'', color:student.color });
+    }
+    MEMORY_FALLBACK['roster'] = ROSTER;
+    localSet('roster', ROSTER);
+    return true;
+  }
+  await loadRoster();
+  return false;
+}
+
 // Teacher use: pull one student's full record fresh from the Sheet, ignoring cache.
 async function getStudentLive(id){
   if(STORAGE_BACKEND === 'sheet'){
@@ -809,16 +837,24 @@ async function getStudentLive(id){
   return getStudent(id);
 }
 
-async function getStudent(id){
-  if(STUDENT_CACHE[id]) return STUDENT_CACHE[id];
-  const rec = await getData('student:'+id);
-  const student = (rec && rec !== FETCH_FAILED) ? rec : { id, name:'', group:'', color:AVATAR_COLORS[0], techs:[], progress:{}, visits:[], lastReadyCheck:'' };
-  // Normalize records saved by earlier versions so no view ever crashes on missing fields
+function normalizeStudent(raw){
+  const student = raw && typeof raw === 'object' ? raw : {};
+  if(!student.id) student.id = 'stu_' + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+  if(typeof student.name !== 'string') student.name = '';
+  if(typeof student.group !== 'string') student.group = '';
   if(!Array.isArray(student.techs)) student.techs = [];
   if(!Array.isArray(student.visits)) student.visits = [];
   if(!student.progress || typeof student.progress !== 'object') student.progress = {};
   if(student.lastReadyCheck === undefined) student.lastReadyCheck = '';
   if(!student.color) student.color = AVATAR_COLORS[0];
+  return student;
+}
+
+async function getStudent(id){
+  if(STUDENT_CACHE[id]) return STUDENT_CACHE[id];
+  const rec = await getData('student:'+id);
+  const base = (rec && rec !== FETCH_FAILED) ? rec : { id, name:'', group:'', color:AVATAR_COLORS[0], techs:[], progress:{}, visits:[], lastReadyCheck:'' };
+  const student = normalizeStudent(base);
   STUDENT_CACHE[id] = student;
   return student;
 }
@@ -1914,7 +1950,7 @@ async function saveTechForm(existingId){
 
 async function renderTeacherStudents(){
   if(!requireTeacher()) return '';
-  const synced = await loadRosterLive();
+  const synced = await loadAllStudentsLive();
   const statusLine = STORAGE_BACKEND === 'sheet'
     ? (synced
         ? '<span class="sync-pill sync-ok">Showing all iPads</span>'
@@ -1936,7 +1972,7 @@ async function renderTeacherStudents(){
   }
   const rows = [];
   for(const r of ROSTER){
-    const student = await getStudentLive(r.id);
+    const student = await getStudent(r.id);
     const lastVisit = student.visits.length ? prettyDate(student.visits[student.visits.length-1]) : 'Never visited';
     const tags = student.techs.map(t=>{
       const s = strandById(t.id);
