@@ -105,6 +105,18 @@
   .welcome-card p{ font-size:16px; color:#C9D3E8; max-width:440px; margin:0 auto 8px; line-height:1.6; }
   .welcome-card .recap{ background:rgba(255,255,255,0.08); border-radius:14px; padding:14px 18px; margin:18px auto; max-width:460px; text-align:left; }
   .welcome-card .recap div{ font-size:14px; color:#C9D3E8; }
+  .ready-scale{ margin:22px auto 8px; max-width:400px; }
+  .scale-row{ display:flex; gap:10px; justify-content:center; }
+  .scale-dot{ width:54px; height:54px; border-radius:50%; border:3px solid rgba(255,255,255,0.4);
+    color:#fff; font-family:'Fredoka',sans-serif; font-weight:700; font-size:20px; display:flex; align-items:center; justify-content:center; }
+  .scale-dot.scale-1{ background:rgba(185,35,47,0.55); }
+  .scale-dot.scale-2{ background:rgba(201,97,31,0.55); }
+  .scale-dot.scale-3{ background:rgba(246,231,88,0.35); }
+  .scale-dot.scale-4{ background:rgba(31,124,114,0.55); }
+  .scale-dot.scale-5{ background:rgba(41,72,154,0.6); }
+  .scale-dot.selected{ border-color:#fff; transform:scale(1.12); box-shadow:0 0 0 3px rgba(255,255,255,0.3); }
+  .scale-ends{ display:flex; justify-content:space-between; margin-top:8px; font-size:12px; color:#C9D3E8; padding:0 4px; }
+  .scale-label{ margin-top:12px; font-size:14px; color:#fff; font-weight:700; min-height:20px; }
   .readycheck-options{ display:flex; flex-direction:column; gap:14px; margin:22px auto 0; max-width:360px; }
   .ready-option{
     background:rgba(255,255,255,0.08); border:2px solid rgba(255,255,255,0.25);
@@ -253,6 +265,19 @@
   .studentrow .meta{ font-size:12px; color:var(--ink-soft); margin-top:2px; }
   .studentrow .techtags{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
   .tag{ font-size:11px; font-weight:700; padding:3px 9px; border-radius:999px; color:#fff; }
+  .read-aloud-btn{
+    position:fixed; right:16px; bottom:calc(16px + env(safe-area-inset-bottom));
+    display:flex; align-items:center; gap:8px;
+    background:var(--paper); color:var(--navy); border:2px solid var(--navy);
+    font-family:'Fredoka',sans-serif; font-weight:600; font-size:15px;
+    padding:12px 18px; border-radius:999px; box-shadow:0 6px 18px rgba(22,35,63,0.2);
+    z-index:1100; min-height:52px;
+  }
+  .read-aloud-btn svg{ width:22px; height:22px; }
+  .read-aloud-btn.on{ background:var(--navy); color:#fff; }
+  .read-aloud-btn.on svg{ animation:pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{ opacity:1; } 50%{ opacity:0.5; } }
+  @media (prefers-reduced-motion: reduce){ .read-aloud-btn.on svg{ animation:none; } }
   .toast{
     position:fixed; left:50%; bottom:24px; transform:translateX(-50%);
     background:var(--navy); color:#fff; font-weight:400; font-size:14px;
@@ -357,6 +382,15 @@
 <div id="toast" class="toast" role="status" aria-live="polite" style="display:none;" onclick="this.style.display='none'"></div>
 
 <script>
+/* ═══════════════════════════════════════════════════════════════
+   GOOGLE SHEET SYNC  —  paste your Apps Script Web App URL here to
+   sync passports across all iPads AND record every student in your
+   Google Sheet. Leave blank to keep each iPad separate.
+   Setup steps are in the guide that came with this file.
+═══════════════════════════════════════════════════════════════ */
+const SHEET_SYNC_URL = "https://script.google.com/macros/s/AKfycbzTCn8YqcQmEnQmnJJfN5UlxDMsOb8_98LLc9n6pUk8SQp1IhW6WmvnFuQCfahAMILDxA/exec";
+const SHEET_ENABLED = /^https:\/\/script\.google\.com\//.test(SHEET_SYNC_URL);
+
 /* ---------------------------------------------------------
    DEFAULT DATA
 --------------------------------------------------------- */
@@ -437,6 +471,7 @@ function icon(name){
     faceGood: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="9" cy="10" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="1" fill="currentColor" stroke="none"/><path d="M8 14c1.2 1.6 2.8 2.4 4 2.4s2.8-.8 4-2.4"/></svg>`,
     faceOkay: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="9" cy="10" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="1" fill="currentColor" stroke="none"/><path d="M8 15h8"/></svg>`,
     faceTricky: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="9" cy="10" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="1" fill="currentColor" stroke="none"/><path d="M8 16c1.2-1.6 2.8-2.4 4-2.4s2.8.8 4 2.4"/></svg>`,
+    speaker: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4Z"/><path d="M16 8.5a4 4 0 0 1 0 7M18.5 6a7 7 0 0 1 0 12"/></svg>`,
   };
   return map[name] || '';
 }
@@ -490,6 +525,7 @@ function medalSVG(){
 //   'memory'  - nothing available; session-only
 const LS_PREFIX = 'ftsPassport:';
 function detectBackend(){
+  if(SHEET_ENABLED) return 'sheet';
   if(typeof window.storage !== 'undefined') return 'claude';
   try{
     const t = LS_PREFIX + '__test';
@@ -502,6 +538,61 @@ const STORAGE_BACKEND = detectBackend();
 const hasStorage = STORAGE_BACKEND === 'claude';
 let MEMORY_FALLBACK = {};
 function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+/* Google Sheet sync via Apps Script Web App.
+   The Sheet is the shared source of truth across iPads; a localStorage
+   mirror is kept so the app is instant and works offline. Writes are sent
+   "fire and forget" (no-cors) because Apps Script can't return CORS headers;
+   reads use a JSONP-style callback which Apps Script CAN serve. */
+
+async function sheetRequest(params){
+  // GET request via <script> tag (JSONP) — works around Apps Script CORS limits
+  return new Promise((resolve) => {
+    const cb = 'ftsCb_' + Math.random().toString(36).slice(2);
+    const timer = setTimeout(() => { cleanup(); resolve(null); }, 8000);
+    function cleanup(){ clearTimeout(timer); delete window[cb]; if(s.parentNode) s.parentNode.removeChild(s); }
+    window[cb] = (data) => { cleanup(); resolve(data); };
+    const qs = Object.entries(params).map(([k,v]) => encodeURIComponent(k)+'='+encodeURIComponent(v)).join('&');
+    const s = document.createElement('script');
+    s.src = SHEET_SYNC_URL + '?callback=' + cb + '&' + qs;
+    s.onerror = () => { cleanup(); resolve(null); };
+    document.head.appendChild(s);
+  });
+}
+
+async function sheetGet(key){
+  const res = await sheetRequest({ action:'get', key });
+  if(res && res.ok && res.value !== undefined && res.value !== null){
+    localSet(key, res.value);
+    return res.value;
+  }
+  return localGet(key); // fall back to local mirror if offline/unavailable
+}
+
+async function sheetSet(key, value){
+  localSet(key, value); // instant + offline-safe
+  try{
+    // Fire-and-forget POST; body carries key + JSON payload
+    await fetch(SHEET_SYNC_URL, {
+      method:'POST', mode:'no-cors',
+      headers:{ 'Content-Type':'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action:'set', key, value })
+    });
+  }catch(e){ /* stays in local mirror; resyncs on next successful write */ }
+  return true;
+}
+
+async function sheetDelete(key){
+  localDelete(key);
+  try{
+    await fetch(SHEET_SYNC_URL, {
+      method:'POST', mode:'no-cors',
+      headers:{ 'Content-Type':'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action:'delete', key })
+    });
+  }catch(e){}
+  return true;
+}
 
 function localGet(key){
   try{ const v = localStorage.getItem(LS_PREFIX + key); return v === null ? null : JSON.parse(v); }
@@ -540,6 +631,11 @@ async function rawGet(key){
 async function getData(key){
   // Memory always wins if we have it — it's the most recent state
   if(key in MEMORY_FALLBACK) return MEMORY_FALLBACK[key];
+  if(STORAGE_BACKEND === 'sheet'){
+    const v = await sheetGet(key);
+    if(v !== null && v !== undefined) MEMORY_FALLBACK[key] = v;
+    return (v === undefined) ? null : v;
+  }
   if(STORAGE_BACKEND === 'local'){
     const v = localGet(key);
     if(v !== null) MEMORY_FALLBACK[key] = v;
@@ -566,6 +662,7 @@ async function getData(key){
 
 async function setData(key, value){
   MEMORY_FALLBACK[key] = value; // memory first: the app is always correct in-session
+  if(STORAGE_BACKEND === 'sheet'){ await sheetSet(key, value); return true; }
   if(STORAGE_BACKEND === 'local'){ localSet(key, value); return true; }
   if(!hasStorage) return true;
   if(storageDegraded){
@@ -635,6 +732,7 @@ function showNotice(message){
 async function deleteData(key){
   delete MEMORY_FALLBACK[key];
   PENDING_WRITES.delete(key);
+  if(STORAGE_BACKEND === 'sheet'){ await sheetDelete(key); return true; }
   if(STORAGE_BACKEND === 'local'){ localDelete(key); return true; }
   if(!hasStorage) return true;
   try{ await window.storage.delete(key, true); return true; }
@@ -828,7 +926,7 @@ const TEAM = [
   { name:'Carys', role:'Head of Programs', line:'co-designs the activities and experiences you\u2019ll try here.',
     fig:{ skin:'#F0C8A0', hair:'#8C5A2B', shirt:'#0A6077', style:'bun' } },
   { name:'Samantha', role:'STEAM Teacher', line:'co-designs and teaches the technology, and helps you collect your stamps.',
-    fig:{ skin:'#B87850', hair:'#2E2E2E', shirt:'#9C2B6D', style:'curly' } },
+    fig:{ skin:'#F4D3B5', hair:'#E8C06A', shirt:'#9C2B6D', style:'curly' } },
 ];
 
 function renderMeetTeam(studentId){
@@ -1022,12 +1120,43 @@ async function markReadyAndGo(studentId){
   go('passport', { studentId });
 }
 
+async function recordReadyScale(studentId, level){
+  const student = await getStudent(studentId);
+  if(!student.readyScale) student.readyScale = [];
+  student.readyScale.push({ date: todayStr(), level });
+  await saveStudent(student);
+  // reflect selection visually without a full re-render
+  document.querySelectorAll('.scale-dot').forEach(d=>d.classList.remove('selected'));
+  const chosen = document.querySelector('.scale-dot[data-level="'+level+'"]');
+  if(chosen) chosen.classList.add('selected');
+  const label = document.getElementById('scaleLabel');
+  if(label) label.textContent = READY_LABELS[level];
+}
+
+const READY_LABELS = {
+  1:'1 \u2014 Not ready. I need some help to feel calm.',
+  2:'2 \u2014 A bit wobbly. I might need a break first.',
+  3:'3 \u2014 Okay. I think I can start.',
+  4:'4 \u2014 Good. I\u2019m ready to learn.',
+  5:'5 \u2014 Great. I\u2019m really ready to go!'
+};
+
 async function renderReadyCheck(studentId){
   const student = await getStudent(studentId);
+  const dots = [1,2,3,4,5].map(n=>`
+    <button class="scale-dot scale-${n}" data-level="${n}" onclick="recordReadyScale('${student.id}',${n})" aria-label="Ready level ${n}">
+      <span>${n}</span>
+    </button>
+  `).join('');
   return `
     <div class="welcome-card">
       <h2>Before you start</h2>
-      <p>How are you feeling right now, ${escapeHtml(student.name)}?</p>
+      <p>How ready do you feel right now, ${escapeHtml(student.name)}?</p>
+      <div class="ready-scale">
+        <div class="scale-row">${dots}</div>
+        <div class="scale-ends"><span>Not ready</span><span>Really ready</span></div>
+        <div class="scale-label" id="scaleLabel">Tap a number if you like.</div>
+      </div>
       <div class="readycheck-options">
         <button class="ready-option" onclick="markReadyAndGo('${student.id}')">
           <div class="ro-icon">${icon('check')}</div>
@@ -1035,7 +1164,7 @@ async function renderReadyCheck(studentId){
         </button>
         <button class="ready-option" onclick="go('calmMoment',{studentId:'${student.id}'})">
           <div class="ro-icon">${icon('pause')}</div>
-          <span>I need a minute first</span>
+          <span>Not ready to start yet</span>
         </button>
       </div>
     </div>
@@ -1804,12 +1933,13 @@ async function renderTeacherStudents(){
 }
 
 async function refreshStudents(){
-  // Clear in-memory copies so the next read genuinely hits storage
+  // Clear in-memory copies so the next read genuinely hits storage (Sheet/local)
   delete MEMORY_FALLBACK['roster'];
   STUDENT_CACHE = {};
   for(const key of Object.keys(MEMORY_FALLBACK)){
     if(key.startsWith('student:')) delete MEMORY_FALLBACK[key];
   }
+  showToast('Checking for the latest passports\u2026');
   await render();
 }
 
@@ -1827,7 +1957,67 @@ async function removeStudent(studentId){
   );
 }
 
-render();
+/* ---------------------------------------------------------
+   READ ALOUD - tap-to-hear using the device's built-in voice
+--------------------------------------------------------- */
+let READ_ALOUD = false;
+
+function speak(text){
+  if(!('speechSynthesis' in window) || !text) return;
+  try{
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text.trim());
+    u.rate = 0.92; u.pitch = 1.0;
+    const voices = window.speechSynthesis.getVoices();
+    const preferred = voices.find(v=>/en-AU/i.test(v.lang)) || voices.find(v=>/en-GB/i.test(v.lang)) || voices.find(v=>/^en/i.test(v.lang));
+    if(preferred) u.voice = preferred;
+    window.speechSynthesis.speak(u);
+  }catch(e){}
+}
+
+function toggleReadAloud(){
+  READ_ALOUD = !READ_ALOUD;
+  if(!READ_ALOUD && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+  const btn = document.getElementById('readAloudBtn');
+  if(btn){
+    btn.classList.toggle('on', READ_ALOUD);
+    btn.setAttribute('aria-pressed', READ_ALOUD ? 'true' : 'false');
+  }
+  if(READ_ALOUD) speak('Read aloud is on. Tap anything to hear it.');
+}
+
+// When read-aloud is on, tapping any text element reads it.
+document.addEventListener('click', function(e){
+  if(!READ_ALOUD) return;
+  const el = e.target.closest('button, .team-card, .story-step, .strandcard, .indicator-card, h1, h2, h3, p, .studenttile, .techtile, .scale-dot');
+  if(!el) return;
+  if(el.id === 'readAloudBtn') return; // don't read the toggle itself
+  const text = (el.getAttribute('aria-label') || el.innerText || el.textContent || '').replace(/\s+/g,' ').trim();
+  if(text) speak(text);
+}, true);
+
+// Floating speaker button, always available, injected once and kept across re-renders.
+function ensureReadAloudButton(){
+  if(document.getElementById('readAloudBtn')) return;
+  const btn = document.createElement('button');
+  btn.id = 'readAloudBtn';
+  btn.className = 'read-aloud-btn';
+  btn.setAttribute('aria-label', 'Turn read aloud on or off');
+  btn.setAttribute('aria-pressed', 'false');
+  btn.onclick = toggleReadAloud;
+  btn.innerHTML = `${icon('speaker')}<span>Hear</span>`;
+  document.body.appendChild(btn);
+}
+
+// Prime voices (some browsers load them asynchronously)
+if('speechSynthesis' in window){
+  window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+}
+
+(async () => {
+  await render();
+  ensureReadAloudButton();
+})();
 </script>
 </body>
 </html>
